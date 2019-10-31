@@ -79,14 +79,13 @@ class Layer(nn.Module):
 
         return out
 
-class BagNet(nn.Module):
+class BagNet77(nn.Module):
     """
     From the diagram on page 16 of https://arxiv.org/pdf/1908.07644.pdf
     Also known as the representation network
     """
 
     def __init__(self, repeats=[1, 2, 4, 1], strides=[2, 2, 2, 1]):
-        self.inplanes = 64
         super(BagNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
