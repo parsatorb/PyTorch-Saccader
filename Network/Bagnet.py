@@ -5,8 +5,6 @@ found in https://arxiv.org/pdf/1908.07644.pdf
 
 import torch.nn as nn
 import math
-import torch
-from collections import OrderedDict
 
 class Bottleneck(nn.Module):
     """

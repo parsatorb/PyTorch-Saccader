@@ -3,9 +3,6 @@ https://arxiv.org/pdf/1908.07644.pdf
 """
 
 import torch.nn as nn
-import math
-import torch
-from collections import OrderedDict
 
 from Bagnet import Bagnet77
 from AttentionCell import AttentionCell
@@ -20,7 +17,7 @@ class Saccader(nn.Module):
         super().__init__()
 
         self.representation_network = Bagnet77()
-        self.attention_network = AttentionCell()
+        self.attention_network = AttentionCell(in_channels=1024)
         self.saccader_cell = SaccaderCell()
 
         self.conv1 = nn.Conv2d(2048, 512, kernel_size=1, stride=1, padding=0, bias=False)
