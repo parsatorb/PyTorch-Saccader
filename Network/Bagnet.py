@@ -4,6 +4,7 @@ found in https://arxiv.org/pdf/1908.07644.pdf
 """
 
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 class Bottleneck(nn.Module):
@@ -25,10 +26,9 @@ class Bottleneck(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x, **kwargs):
-        residual = x
+    def forward(self, out, **kwargs):
 
-        out = self.conv1(x)
+        out = self.conv1(out)
         out = self.bn1(out)
         out = self.relu(out)
 
@@ -57,7 +57,7 @@ class Layer(nn.Module):
             self.repeat_section.append(block(inplanes=planes, planes=planes, stride=1))
 
     def foward(self, x):
-        residual1 = x
+        residual = x
 
         out = self.block1(x)
 
@@ -83,7 +83,7 @@ class BagNet77(nn.Module):
     Also known as the representation network
     """
 
-    def __init__(self, repeats=[1, 2, 4, 1], strides=[2, 2, 2, 1]):
+    def __init__(self, repeats=[1, 2, 4, 1], strides=[2, 2, 2, 1], n_classes=1000):
         super(BagNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -93,6 +93,9 @@ class BagNet77(nn.Module):
         self.layer2 = Layer(Bottleneck, inplanes=256, planes=128, stride=strides[1], repeat=repeats[1])
         self.layer3 = Layer(Bottleneck, inplanes=512, planes=256, stride=strides[1], repeat=repeats[2])
         self.layer4 = Layer(Bottleneck, inplanes=1024, planes=512, stride=strides[1], repeat=repeats[3])
+        
+        self.conv_what = nn.Conv2D(2048, 512, kernal_size=1, stride=1, padding=0, bias=False)
+        self.conv_what = nn.Conv2D(512, 1000, kernal_size=1, stride=1, padding=0, bias=False)
 
         #Initialize weights
         for m in self.modules():
@@ -103,8 +106,8 @@ class BagNet77(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward(self, x):
-        out = self.conv1(x)
+    def forward(self, out):
+        out = self.conv1(out)
         out = self.bn1(out)
         out = self.relu(out)
 
@@ -113,4 +116,4 @@ class BagNet77(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
 
-        return out
+        return F.adaptive_avg_pool2d(out, (1, 1))
