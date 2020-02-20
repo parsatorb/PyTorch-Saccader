@@ -10,6 +10,8 @@ import math
 class Bottleneck(nn.Module):
     """
     Small yellow boxes from the figure in page 16 of https://arxiv.org/pdf/1908.07644.pdf
+    
+    Note: A Bottleneck outputs 4 times as many channels as the planes parameter
     """
 
     def __init__(self, inplanes, planes, stride=2, kernel_size=1):
@@ -44,24 +46,24 @@ class Bottleneck(nn.Module):
 
 class Layer(nn.Module):
     def __init__(self, block, inplanes, planes, stride, repeat):
+        super().__init__()
         self.block1 = block(inplanes=inplanes, planes=planes, stride=stride)
-        self.block2 = block(inplanes=planes, planes=planes, stride=1)
+        self.block2 = block(inplanes=4*planes, planes=planes, stride=1)
 
-        self.resblock = nn.Conv2d(inplanes, planes*4, kernal_size=1, stide=stride,
+        self.resblock = nn.Conv2d(inplanes, planes*4, kernel_size=1, stride=stride,
                                     padding=0, bias=False)
         self.res_bn = nn.BatchNorm2d(inplanes*4)
+
         self.relu = nn.ReLU(inplace=True)
 
         self.repeat_section = []
         for i in range(repeat):
-            self.repeat_section.append(block(inplanes=planes, planes=planes, stride=1))
-
-    def foward(self, x):
-        residual = x
-
+            self.repeat_section.append(block(inplanes=4*planes, planes=planes, stride=1))
+            
+    def forward(self, x, **kwargs):
         out = self.block1(x)
 
-        residual = self.resblock(residual)
+        residual = self.resblock(x)
         residual = self.res_bn(residual)
         residual = self.relu(residual)
 
@@ -72,9 +74,9 @@ class Layer(nn.Module):
 
         for section in self.repeat_section:
             out += residual
-            residual = out
+            #residual = out
             out = section(out)
-
+            
         return out
 
 class BagNet77(nn.Module):
@@ -84,7 +86,7 @@ class BagNet77(nn.Module):
     """
 
     def __init__(self, repeats=[1, 2, 4, 1], strides=[2, 2, 2, 1], n_classes=1000):
-        super(BagNet, self).__init__()
+        super(BagNet77, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -94,8 +96,8 @@ class BagNet77(nn.Module):
         self.layer3 = Layer(Bottleneck, inplanes=512, planes=256, stride=strides[1], repeat=repeats[2])
         self.layer4 = Layer(Bottleneck, inplanes=1024, planes=512, stride=strides[1], repeat=repeats[3])
         
-        self.conv_what = nn.Conv2D(2048, 512, kernal_size=1, stride=1, padding=0, bias=False)
-        self.conv_what = nn.Conv2D(512, 1000, kernal_size=1, stride=1, padding=0, bias=False)
+        self.conv_what = nn.Conv2d(2048, 512, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv_what = nn.Conv2d(512, 1000, kernel_size=1, stride=1, padding=0, bias=False)
 
         #Initialize weights
         for m in self.modules():
@@ -106,7 +108,7 @@ class BagNet77(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward(self, out):
+    def forward(self, out, **kwargs):
         out = self.conv1(out)
         out = self.bn1(out)
         out = self.relu(out)

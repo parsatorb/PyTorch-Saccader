@@ -13,6 +13,7 @@ from PIL import Image
 import sys
 sys.path.append("..")
 sys.path.append("./Network/")
+from Bagnet import BagNet77
 
 import torch
 import torch.nn as nn
@@ -26,12 +27,13 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
+torch.cuda.set_device(0)
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
 
-custom_models = {}
+custom_models = {"BagNet77": BagNet77}
 model_names += [*custom_models] #append keys
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -92,7 +94,7 @@ parser.add_argument('--interpolation', default=Image.BOX, type=int,
 best_acc1 = 0
 
 
-def main(Dataset, centers_path, num_focal=3):
+def main():
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -121,13 +123,13 @@ def main(Dataset, centers_path, num_focal=3):
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args, Dataset, centers_path, num_focal))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args, Dataset, centers_path, num_focal)
+        main_worker(args.gpu, ngpus_per_node, args)
 
 
-def main_worker(gpu, ngpus_per_node, args, Dataset, centers_path, num_focal):
+def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     args.gpu = gpu
 
@@ -211,12 +213,19 @@ def main_worker(gpu, ngpus_per_node, args, Dataset, centers_path, num_focal):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train/')
-    valdir = os.path.join(args.data, 'val/')
+    traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    train_dataset = Dataset(traindir, centers_path+"_train.pkl", transforms.Compose([transforms.ToTensor(), normalize]))
+    train_dataset = datasets.ImageFolder(
+        traindir,
+        transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]))
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -228,16 +237,14 @@ def main_worker(gpu, ngpus_per_node, args, Dataset, centers_path, num_focal):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
-        Dataset(valdir, centers_path+"_val.pkl", transforms.Compose([transforms.ToTensor(), normalize])),
+        datasets.ImageFolder(valdir, transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])),
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
-
-    if args.evaluate:
-        if num_focal > 1:
-            validate_final(val_loader, model, criterion, args)
-        else:
-            validate(val_loader, model, criterion, args)
-        return
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
